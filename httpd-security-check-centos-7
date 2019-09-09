@@ -1,0 +1,84 @@
+#!/bin/bash
+#
+# httpd Security Self-Check
+#
+# Looks for several security-related configuration bits
+# Script tested on CentOS 7 and assumes httpd installed via CentOS yum repo
+
+
+
+# Check if httpd and mod_ssl is installed
+checkrpmhttpd=$(rpm -qa | grep '^httpd-' | grep -v 'httpd-tools' | cut -d '-' -f1)
+if [ "$checkrpmhttpd" = "httpd" ]; then
+   echo "httpd version:    " $(httpd -v | grep 'Server version' | cut -d ':' -f 2 | sed s/'^ '//g)
+else
+   # No point in continuing if httpd isn't even on the system.
+   echo 'httpd does not seemed to be installed.' && exit
+fi
+
+
+checkrpmmodssl=$(rpm -qa | grep '^mod_ssl-' | cut -d '-' -f1)
+if [ "$checkrpmmodssl" = "mod_ssl" ]; then
+   echo "mod_ssl version:  " $(rpm -qa | grep '^mod_ssl-')
+else
+   echo 'mod_ssl does not seem to be installed, therefore HTTPS support is non-existent.'
+fi
+
+echo ''
+
+httpdsvcenabled=$(systemctl status httpd | grep loaded | awk '{print $4}' | cut -d ';' -f1)
+if [ "$httpdsvcenabled" = "enabled" ]; then
+   echo 'httpd.service is enabled'
+else
+   echo 'httpd.service is not enabled'
+fi
+
+
+httpdactive=$(systemctl status httpd | grep Active | awk '{print $2}')
+if [ "$httpdactive" = "active" ]; then
+   echo 'httpd is running'
+else
+   echo 'httpd is not running'
+fi
+
+echo ''
+
+httpdport=$(cat /etc/httpd/conf/httpd.conf | grep Listen | grep -v '^#' | awk '{print $2}')
+echo 'Basic port: '$httpdport
+httpdsecureport=$(cat /etc/httpd/conf.d/ssl.conf | grep Listen | awk '{print $2}')
+echo 'Secure port: '$httpdsecureport
+
+netstat -antp | grep $httpdport
+netstat -antp | grep $httpdsecureport
+
+# Check for SSLv3 and TLS 1.0 availability
+echo ''
+echo "q" | openssl s_client -connect 127.0.0.1:443 -ssl3 2>&1 | grep 'handshake failure' >> /dev/null || echo 'Insecure - SSLv3 is enabled'
+echo "q" | openssl s_client -connect 127.0.0.1:443 -tls1 2>&1 | grep 'handshake failure' >> /dev/null || echo 'Insecure - TLSv1 is enabled'
+
+
+# Weak ciphersuite check 
+# Note, 3DES checking currently doesn't work here since the openssl about shows DES, not 3DES
+
+echo "q" | openssl s_client -connect 127.0.0.1:443 -cipher 3DES 2>&1 | grep 'Cipher    :' | grep DES >> /dev/null && echo 'Insecure - DES and/or 3DES enabled'
+
+declare -a ciphersuitecrud=("3DES" "RC4" "IDEA" "MD5" "SHA1")
+for i in "${ciphersuitecrud[@]}"; do 
+   echo "q" | openssl s_client -connect 127.0.0.1:443 -cipher "$i" 2>&1 | grep 'Cipher    :' | grep "$i" >> /dev/null && echo "Insecure - "$i" enabled"
+done
+
+privatekeypath=$(cat /etc/httpd/conf.d/ssl.conf | grep SSLCertificateKeyFile | grep -v '^#' | awk '{print $2}')
+privatekeypermissions=$(stat /etc/pki/tls/private/localhost.key | grep 'Access:' | grep Uid | cut -d '(' -f2 | cut -d '/' -f1)
+privatekeyowner=$(stat /etc/pki/tls/private/localhost.key | grep 'Access:' | awk '{print $6}' | cut -d ')' -f1)
+privatekeygroup=$(stat /etc/pki/tls/private/localhost.key | grep 'Access:' | awk '{print $10}' | cut -d ')' -f1)
+if [ "$privatekeypermissions" != "0600" ]; then
+   echo 'The private key at $privatekeypath needs to be set to 0600!'
+fi
+
+if [ "$privatekeyowner" != "root" ]; then
+   echo "The private key owner of $privatekeypath must be root!"
+fi
+
+if [ "$privatekeygroup" != "root" ]; then
+   echo "The private key group owner of $privatekeypath must be root!"
+fi
