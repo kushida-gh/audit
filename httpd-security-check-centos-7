@@ -6,7 +6,6 @@
 # Script tested on CentOS 7 and assumes httpd installed via CentOS yum repo
 
 
-
 # Check if httpd and mod_ssl is installed
 checkrpmhttpd=$(rpm -qa | grep '^httpd-' | grep -v 'httpd-tools' | cut -d '-' -f1)
 if [ "$checkrpmhttpd" = "httpd" ]; then
@@ -26,6 +25,7 @@ fi
 
 echo ''
 
+
 httpdsvcenabled=$(systemctl status httpd | grep loaded | awk '{print $4}' | cut -d ';' -f1)
 if [ "$httpdsvcenabled" = "enabled" ]; then
    echo 'httpd.service is enabled'
@@ -40,7 +40,6 @@ if [ "$httpdactive" = "active" ]; then
 else
    echo 'httpd is not running'
 fi
-
 echo ''
 
 httpdport=$(cat /etc/httpd/conf/httpd.conf | grep Listen | grep -v '^#' | awk '{print $2}')
@@ -67,6 +66,8 @@ for i in "${ciphersuitecrud[@]}"; do
    echo "q" | openssl s_client -connect 127.0.0.1:443 -cipher "$i" 2>&1 | grep 'Cipher    :' | grep "$i" >> /dev/null && echo "Insecure - "$i" enabled"
 done
 
+
+# Private key permissions check
 privatekeypath=$(cat /etc/httpd/conf.d/ssl.conf | grep SSLCertificateKeyFile | grep -v '^#' | awk '{print $2}')
 privatekeypermissions=$(stat /etc/pki/tls/private/localhost.key | grep 'Access:' | grep Uid | cut -d '(' -f2 | cut -d '/' -f1)
 privatekeyowner=$(stat /etc/pki/tls/private/localhost.key | grep 'Access:' | awk '{print $6}' | cut -d ')' -f1)
@@ -82,6 +83,7 @@ fi
 if [ "$privatekeygroup" != "root" ]; then
    echo "The private key group owner of $privatekeypath must be root!"
 fi
+
 
 # Is TraceEnable set to off?
 traceset=$(cat /etc/httpd/conf/httpd.conf | grep TraceEnable | grep -v '^#' | awk '{print $1'})
