@@ -121,7 +121,7 @@ else
    httpdservertokenvalue=$(cat /etc/httpd/conf/httpd.conf | grep '^ServerTokens' | awk '{print $2}')
    if [ "$httpdservertokenvalue" != "Prod" ] && [ "$httpdservertokenvalue" != "prod" ]; then
       echo "ServerTokens set to "$httpdservertokenvalue" revealing the Apache version in the response header - useful to attackers"
-      echo "httpd current returns this ServerToken in the response header: $httpdservertokeninheader"
+      echo "httpd currently returns this ServerToken in the response header: $httpdservertokeninheader"
       echo ""
       echo "See: https://httpd.apache.org/docs/2.4/mod/core.html#servertokens"
    fi
