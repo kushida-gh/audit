@@ -61,7 +61,6 @@ echo "q" | openssl s_client -connect 127.0.0.1:443 -tls1 2>&1 | grep 'handshake 
 # Weak ciphersuite check 
 # Note, 3DES checking currently doesn't work here since the openssl about shows DES, not 3DES
 httpdsslciphersuite=$(cat /etc/httpd/conf.d/ssl.conf | grep '^SSLCipherSuite')
-echo ""
 echo "The SSLCipherSuite setting in /etc/httpd/conf.d/ssl.conf"
 echo "$httpdsslciphersuite"
 echo ""
