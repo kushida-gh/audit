@@ -1,0 +1,88 @@
+#!/bin/bash
+#
+#
+echo "Apache httpd CIS Benchmark 1.5.0 audit script"
+echo ""
+echo "See https://www.cisecurity.org for more details"
+echo "Note: this script is based on CentOS 7 with httpd installed via yum"
+echo ""
+echo ""
+echo ""
+
+echo "Sections 1.1 - 1.3 have been skipped"
+echo ""
+echo ""
+echo ""
+
+echo "2.1 Ensure Only Necessary Authentication and Authorization Modules Are Enabled (Not Scored)"
+echo "---------------------------------------------------------------------------------------------------"
+echo "Check for enabled authentication, authorization, and LDAP modules:"
+echo "(Determine if any listed are required and if not, comment out in /etc/httpd/conf.modules.d/00-base.conf)"
+echo "Reference: http://httpd.apache.org/docs/2.4/howto/auth.html"
+echo ""
+httpd -M 2> /dev/null | egrep 'auth._'
+httpd -M 2> /dev/null | egrep 'ldap'
+echo ""
+echo ""
+echo ""
+
+# echo "Do you want to auto-comment these out now? (yes/no)"
+# read answer
+# if [ "$answer" = "yes" ]; then
+#    sed -i s/'^LoadModule authn_'/'# LoadModule authn_'/g /etc/httpd/conf.modules.d/00-base.conf
+#    sed -i s/'^LoadModule authz_'/'# LoadModule authz_'/g /etc/httpd/conf.modules.d/00-base.conf
+# fi
+# 
+# if [ "$answer" = "no" ]; then
+#    echo "Nothing has been changed"
+#    echo ""
+# fi
+# echo "Grep of authn_ and authz_ in /etc/httpd/conf.modules.d/00-base.conf:"
+# cat /etc/httpd/conf.modules.d/00-base.conf | grep 'LoadModule authn_'
+# cat /etc/httpd/conf.modules.d/00-base.conf | grep 'LoadModule authz_'
+# echo ""
+# echo ""
+
+echo "2.2 Ensure the Log Config Module Is Enabled (Scored)"
+echo "---------------------------------------------------------------------------------------------------"
+echo "Check for log_config module (should be enabled):"
+echo ""
+httpd -M 2> /dev/null | grep log_config
+echo ""
+echo ""
+echo ""
+
+echo "2.3 Ensure the WebDAV Modules Are Disabled (Scored)"
+echo "---------------------------------------------------------------------------------------------------"
+echo "Check for enabled WebDav modules (there should be none):"
+echo ""
+httpd -M 2> /dev/null | grep ' dav_[[:print:]]+module'
+echo ""
+echo ""
+echo ""
+
+echo "2.4 Ensure the Status Module Is Disabled (Scored)"
+echo "---------------------------------------------------------------------------------------------------"
+echo "Check for enabled mod_status module (should be disabled):"
+httpd -M 2> /dev/null | egrep 'status_module'
+echo ""
+echo ""
+echo ""
+
+echo "2.5 Ensure the Autoindex Module Is Disabled (Scored)"
+echo "---------------------------------------------------------------------------------------------------"
+echo "Check for enabled autoindex module (should be disabled):"
+httpd -M 2> /dev/null | grep autoindex_module
+echo ""
+echo ""
+echo ""
+
+echo "2.6 Ensure the Proxy Modules Are Disabled (Scored)"
+echo "---------------------------------------------------------------------------------------------------"
+echo "Check for enabled proxy modules (should be disabled):"
+httpd -M 2> /dev/null | grep proxy_
+echo ""
+echo ""
+echo ""
+
+# This is something I've just started working on
