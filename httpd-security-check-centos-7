@@ -97,3 +97,32 @@ if [ "$tracesetting" = "on" ] || [ "$tracesetting" = "On" ]; then
    	echo 'Are you sure you want to allow the TRACE method?'
    	echo 'See: https://www.owasp.org/index.php/Cross_Site_Tracing'
 fi
+
+
+# Check which user/group httpd runs as
+httpduser=$(cat /etc/httpd/conf/httpd.conf | grep '^User' | awk '{print $2}')
+httpdgroup=$(cat /etc/httpd/conf/httpd.conf | grep '^Group' | awk '{print $2}')
+
+if [ "$httpduser" != "apache" ]; then 
+   echo "httpd is not set to run as user apache - it runs as user $httpduser"
+fi
+
+if [ "$httpdgroup" != "apache" ]; then 
+   echo "httpd is not to run as group apache - it runs as group $httpdgroup"
+fi
+
+
+# Check ServerToken value
+httpdservertoken=$(cat /etc/httpd/conf/httpd.conf | grep '^ServerTokens')
+httpdservertokeninheader=$(curl -s -I http://127.0.0.1 | grep Server | cut -d ':' -f2- | sed s/'^ '//g)
+if [ -z "$httpdservertoken" ]; then
+   echo "ServerTokens is not set within /etc/httpd/conf/httpd.conf"
+else 
+   httpdservertokenvalue=$(cat /etc/httpd/conf/httpd.conf | grep '^ServerTokens' | awk '{print $2}')
+   if [ "$httpdservertokenvalue" != "Prod" ] && [ "$httpdservertokenvalue" != "prod" ]; then
+      echo "ServerTokens set to "$httpdservertokenvalue" revealing the Apache version in the response header - useful to attackers"
+      echo "httpd current returns this ServerToken in the response header: $httpdservertokeninheader"
+      echo ""
+      echo "See: https://httpd.apache.org/docs/2.4/mod/core.html#servertokens"
+   fi
+fi
