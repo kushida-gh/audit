@@ -6,7 +6,7 @@
 # Script tested on CentOS 7 and assumes httpd installed via CentOS yum repo
 
 
-# Check if httpd and mod_ssl is installed
+# Check if httpd and mod_ssl are installed
 checkrpmhttpd=$(rpm -qa | grep '^httpd-' | grep -v 'httpd-tools' | cut -d '-' -f1)
 if [ "$checkrpmhttpd" = "httpd" ]; then
    echo "httpd version:    " $(httpd -v | grep 'Server version' | cut -d ':' -f 2 | sed s/'^ '//g)
