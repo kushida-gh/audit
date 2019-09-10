@@ -95,5 +95,5 @@ if [ "$traceset" = "TraceEnable" ]; then
 fi
 if [ "$tracesetting" = "on" ] || [ "$tracesetting" = "On" ]; then
    	echo 'Are you sure you want to allow the TRACE method?'
-   	echo 'See https://www.owasp.org/index.php/Cross_Site_Tracing'
+   	echo 'See: https://www.owasp.org/index.php/Cross_Site_Tracing'
 fi
