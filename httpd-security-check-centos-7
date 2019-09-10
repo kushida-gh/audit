@@ -88,14 +88,29 @@ fi
 # Is TraceEnable set to off?
 traceset=$(cat /etc/httpd/conf/httpd.conf | grep TraceEnable | grep -v '^#' | awk '{print $1'})
 tracesetting=$(cat /etc/httpd/conf/httpd.conf | grep TraceEnable | grep -v '^#' | awk '{print $2'})
-if [ "$traceset" = "TraceEnable" ]; then
-   echo "TraceEnable directive exists in /etc/httpd/conf/httpd.conf"
-   echo "TraceEnable is set to $tracesetting"
-   echo ''
+if [ -z "$traceset" ]; then
+   echo "TraceEnable directive is not set within /etc/httpd/conf/httpd.conf"
+   tracetest=$(curl -s -I -X TRACE http://127.0.0.1/ | grep '200')
+   if [[ "$tracetest" == *"HTTP/1.1 200 OK"* ]]; then
+      echo "Results from a HTTP TRACE to this server: $tracetest"
+      echo "See: https://www.owasp.org/index.php/Cross_Site_Tracing"
+      echo ""
+   fi
 fi
+
+if [ "$traceset" = "TraceEnable" ]; then
+   echo "TraceEnable directive exists in /etc/httpd/conf/httpd.conf and set to $tracesetting"
+   echo ""
+fi
+
 if [ "$tracesetting" = "on" ] || [ "$tracesetting" = "On" ]; then
-   	echo 'Are you sure you want to allow the TRACE method?'
-   	echo 'See: https://www.owasp.org/index.php/Cross_Site_Tracing'
+   tracetest=$(curl -s -I -X TRACE http://127.0.0.1/ | grep '200')
+   if [[ "$tracetest" == *"HTTP/1.1 200 OK"* ]]; then
+      echo "Results from a HTTP TRACE to this server: $tracetest"
+   fi
+   echo 'Are you sure you want to allow the TRACE method?'
+   echo 'See: https://www.owasp.org/index.php/Cross_Site_Tracing'
+   echo ""
 fi
 
 
