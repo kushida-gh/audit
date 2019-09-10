@@ -22,8 +22,7 @@ if [ "$checkrpmmodssl" = "mod_ssl" ]; then
 else
    echo 'mod_ssl does not seem to be installed, therefore HTTPS support is non-existent.'
 fi
-
-echo ''
+echo ""
 
 
 httpdsvcenabled=$(systemctl status httpd | grep loaded | awk '{print $4}' | cut -d ';' -f1)
@@ -36,31 +35,36 @@ fi
 
 httpdactive=$(systemctl status httpd | grep Active | awk '{print $2}')
 if [ "$httpdactive" = "active" ]; then
-   echo 'httpd is running'
+   echo "httpd is running"
 else
-   echo 'httpd is not running'
+   echo "httpd is not running"
 fi
-echo ''
-
+echo ""
 httpdport=$(cat /etc/httpd/conf/httpd.conf | grep Listen | grep -v '^#' | awk '{print $2}')
 echo 'Basic port: '$httpdport
 httpdsecureport=$(cat /etc/httpd/conf.d/ssl.conf | grep Listen | awk '{print $2}')
 echo 'Secure port: '$httpdsecureport
-
 netstat -antp | grep $httpdport
 netstat -antp | grep $httpdsecureport
 
+
 # Check for SSLv3 and TLS 1.0 availability
-echo ''
+httpdsslprotocol=$(cat /etc/httpd/conf.d/ssl.conf | grep '^SSLProtocol')
+echo "The SSLProtocol setting in /etc/httpd/conf.d/ssl.conf"
+echo "$httpdsslprotocol"
+echo ""
 echo "q" | openssl s_client -connect 127.0.0.1:443 -ssl3 2>&1 | grep 'handshake failure' >> /dev/null || echo 'Insecure - SSLv3 is enabled'
 echo "q" | openssl s_client -connect 127.0.0.1:443 -tls1 2>&1 | grep 'handshake failure' >> /dev/null || echo 'Insecure - TLSv1 is enabled'
 
 
 # Weak ciphersuite check 
 # Note, 3DES checking currently doesn't work here since the openssl about shows DES, not 3DES
-
+httpdsslciphersuite=$(cat /etc/httpd/conf.d/ssl.conf | grep '^SSLCipherSuite')
+echo ""
+echo "The SSLCipherSuite setting in /etc/httpd/conf.d/ssl.conf"
+echo "$httpdsslciphersuite"
+echo ""
 echo "q" | openssl s_client -connect 127.0.0.1:443 -cipher 3DES 2>&1 | grep 'Cipher    :' | grep DES >> /dev/null && echo 'Insecure - DES and/or 3DES enabled'
-
 declare -a ciphersuitecrud=("3DES" "RC4" "IDEA" "MD5" "SHA1")
 for i in "${ciphersuitecrud[@]}"; do 
    echo "q" | openssl s_client -connect 127.0.0.1:443 -cipher "$i" 2>&1 | grep 'Cipher    :' | grep "$i" >> /dev/null && echo "Insecure - "$i" enabled"
@@ -117,7 +121,6 @@ fi
 # Check which user/group httpd runs as
 httpduser=$(cat /etc/httpd/conf/httpd.conf | grep '^User' | awk '{print $2}')
 httpdgroup=$(cat /etc/httpd/conf/httpd.conf | grep '^Group' | awk '{print $2}')
-
 if [ "$httpduser" != "apache" ]; then 
    echo "httpd is not set to run as user apache - it runs as user $httpduser"
 fi
