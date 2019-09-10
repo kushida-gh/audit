@@ -46,6 +46,7 @@ httpdsecureport=$(cat /etc/httpd/conf.d/ssl.conf | grep Listen | awk '{print $2}
 echo 'Secure port: '$httpdsecureport
 netstat -antp | grep $httpdport
 netstat -antp | grep $httpdsecureport
+echo ""
 
 
 # Check for SSLv3 and TLS 1.0 availability
