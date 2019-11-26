@@ -1,0 +1,507 @@
+#!/bin/bash
+#
+# General-purpose RHEL/CentOS security audit script
+# This script needs to be ran via sudo or as root!
+
+echo ''
+
+# Determine RHEL version
+rhelversion=$(cat /etc/redhat-release | awk '{print $7}' | cut -d '.' -f1)
+
+# Determine runlevel
+runlevelcurrent=$(runlevel | awk '{print $2}')
+runlevelatboot=$(cat /etc/inittab | grep '^id' | cut -d ':' -f2)
+totalrpmpackagesinstalled=$(rpm -qa | wc -l)
+rhelreleaseversion=$(cat /etc/redhat-release | awk '{print $7}')
+uptime=$(uptime | cut -d ',' -f1 | cut -d 'p' -f2 | sed s/^' '//g)
+echo 'System basics:'
+echo '----------------------------------------------------------------------'
+echo "RHEL version: $rhelreleaseversion"
+echo "Uptime: $uptime"
+echo "Current runlevel: $runlevelcurrent"
+echo "Boot-time runlevel: $runlevelatboot"
+echo ''
+echo 'IP address(es):'
+ifconfig | grep inet | grep -v 'inet addr:127\.0\.0\.1' | awk '{print $2}' | cut -d ':' -f2
+echo ''
+echo "Total number of RPM packages installed: $totalrpmpackagesinstalled"
+echo ''
+echo ''
+echo ''
+
+# Check if IPv6 is enabled (should not be)
+ipv6disabledall=$(sysctl net.ipv6.conf.all.disable_ipv6 | awk '{print $3}')
+ipv6disableddefault=$(sysctl net.ipv6.conf.default.disable_ipv6 | awk '{print $3}')
+echo 'Audit for IPv6 usage'
+echo '----------------------------------------------------------------------'
+
+if [ "$ipv6disabledall" = "0" ] || [ $ipv6disableddefault = "0" ]; then
+   echo 'IPv6 is enabled on the system!'
+   echo ''
+   echo 'IPv6 addresses in use:'
+   echo ''
+   ifconfig | grep inet6 | cut -c 6-
+   echo ''
+   echo 'Correct temporarily with (no reboot required):'
+   echo ''
+   echo '   sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1'
+   echo '   sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1'
+   echo ''
+   echo 'and/or make permanent (reboot required):'
+   echo ''
+   echo '   sudo sed -i 's/net.ipv6.conf.all.disable_ipv6 = 0/net.ipv6.conf.all.disable_ipv6 = 1/g' /etc/sysctl.conf'
+   echo '   sudo sed -i 's/net.ipv6.conf.default.disable_ipv6 = 0/net.ipv6.conf.default.disable_ipv6 = 1/g' /etc/sysctl.conf'
+   echo ''
+else
+   echo 'IPv6 is disabled on this host'
+   echo ''
+fi
+echo ''
+echo ''
+echo ''
+echo ''
+
+
+echo 'Audit for time-synchronization'
+echo '----------------------------------------------------------------------'
+if [ "$rhelversion" = "6" ]; then
+   # Check for RPM-based ntpd install
+   ntprpminstall=$(rpm -qa | grep '^ntp-' | cut -d '-' -f1)
+   if [ "$ntprpminstall" = "ntp" ]; then
+      echo 'ntpd is installed'
+      ntpinstallcheck=$(rpm -qi ntp | grep '^Version' | awk '{print $3}')
+      echo "ntpd version is $ntpinstallcheck"
+      ntpdatstartup=$(chkconfig --list | grep ntpd | grep -v ntpdate | cut -d "$runlevelcurrent" -f 2 | cut -d ':' -f2 | awk '{print $1}')
+      echo "ntpd startup state at boot is $ntpdatstartup"
+      echo '/etc/ntp.conf lists the following upstream time servers:'
+      echo ''
+      cat /etc/ntp.conf | grep '^server' | awk '{print $2}'
+      echo ''
+      ntpdstate=$(service ntpd status | cut -d ")" -f2 | sed s/'^ '//g | cut -d '.' -f1)
+      if [ "$ntpdstate" = "is running" ]; then
+         echo 'ntpd is currently running - time synchronization results:'
+         echo ''
+         ntpq -pn
+      else
+         echo 'ntpd is currently not running'
+      fi
+   else
+      echo 'ntpd is not installed'
+   fi
+fi
+if [ "$rhelversion" = "7" ]; then
+echo 'Audit for dual install of ntpd and chronyd'
+echo '----------------------------------------------------------------------'
+checkrpmntp=$(rpm -qa | grep '^ntp-' | cut -d '-' -f1)
+checkrpmchrony=$(rpm -qa | grep '^chrony-' | cut -d '-' -f1)
+   if [ "$checkrpmntp" = "ntp" ] && [ "$checkrpmchrony" = "chrony" ]; then
+      echo 'Both ntpd and chronyd are installed - potential conflict!'
+      echo ''
+   fi
+svcrunstatntpd=$(systemctl is-active --quiet ntpd && echo 'yes')
+svcrunstatchronyd=$(systemctl is-active --quiet chronyd && echo 'yes')
+   if [ "$svcrunstatntpd" = "yes" ]; then
+      echo 'ntpd is the active NTP daemon'
+      echo ''
+   fi
+   if [ "$svcrunstatchronyd" = "yes" ]; then
+      echo 'chronyd is the active NTP daemon'
+      echo ''
+   fi
+   if [ "$svcrunstatntpd" != "yes" ] && [ "$svcrunstatchronyd" != "yes" ]; then
+      echo 'Neither ntpd or chronyd are running!'
+      echo ''
+   fi
+   # Check if ntpd is running
+   checkrpmntp=$(rpm -qa | grep '^ntp-' | cut -d '-' -f1)
+   if [ "$checkrpmntp" = "ntp" ]; then
+      svcrunstatntpd=$(systemctl is-active --quiet ntpd && echo 'yes')
+      echo '   Audit if ntpd is running'
+      echo '   ----------------------------------------------------------------------'
+      if [ "$svcrunstatntpd" = "yes" ]; then
+         # Check whether currently synced
+         ntpsyncstat=$(ntpstat | grep sync | awk '{print $1}')
+         if [ "$ntpsyncstat" = "unsynchronised" ]; then
+            echo '   ntpd is currently unsynchronised'
+            echo ''
+         else
+            ntpdstratum=$(ntpstat | grep sync | awk '{print $8}')
+            ntpdreference=$(ntpstat | grep sync | awk '{print $5}' | cut -d '(' -f 2 | cut -d ')' -f1)
+         echo '   Current NTP stratum:' $ntpdstratum
+         echo '   Upstream NTP host:' $ntpdreference
+         echo ''
+         fi
+      else
+         echo '   ntpd is not running - correct with:'
+         echo ''
+          echo '      sudo systemctl enable ntpd'
+         echo '      sudo systemctl start ntpd'
+         echo ''
+      fi
+   fi
+
+   # Check if chronyd is running
+   checkrpmchrony=$(rpm -qa | grep '^chrony-' | cut -d '-' -f1)
+   if [ "$checkrpmchrony" = "chrony" ]; then
+      svcrunstatchronyd=$(systemctl is-active --quiet chronyd && echo 'yes')
+      echo '   Audit if chronyd is running'
+      echo '   ----------------------------------------------------------------------'
+      if [ "$svcrunstatchronyd" = "yes" ]; then
+         # Get current stratum reference, this requires sudo privileges or root
+         chronydstratum=$(chronyc -n tracking | grep '^Stratum' | awk '{print $3}')
+            if [ "$chronydstratum" = "0" ]; then
+               echo '   chronyd is currently unsynchronised'
+               echo ''
+            fi
+         chronydreference=$(chronyc -n tracking | grep '^Reference ID' | cut -d '(' -f2 | cut -d ')' -f1)
+         echo '   Current NTP stratum:' $chronydstratum
+         echo '   Upstream NTP host:' $chronydreference
+         echo ''
+      else
+         echo '   chronyd is not running - correct with:'
+         echo ''
+         echo '      sudo systemctl enable chronyd'
+         echo '      sudo systemctl start chronyd'
+         echo ''
+       fi
+   fi
+fi
+timezone=$(date | awk '{print $5}')
+clocksysconfig=$(cat /etc/sysconfig/clock | cut -d '=' -f2 | sed s/\"//g)
+echo ''
+echo "Current clock timezone: $timezone"
+echo "/etc/sysconfig/clock set to: $clocksysconfig"
+echo ''
+echo ''
+echo ''
+echo ''
+
+
+echo 'Audit for syslog configuration'
+echo '----------------------------------------------------------------------'
+if [ "$rhelversion" = "6" ]; then
+   checkrpmrsyslog=$(rpm -qa | grep '^rsyslog-' | cut -d '-' -f1)
+   checkrpmsyslogng=$(rpm -qa | grep '^syslog-ng-' | grep -v syslog-ng-libdbi | cut -d '-' -f1-2)
+
+   if [ "$checkrpmrsyslog" = "rsyslog" ]; then
+      echo 'rsyslog is installed'
+
+      rsysloginstallcheck=$(rpm -qi rsyslog | grep '^Version' | awk '{print $3}')
+      echo "rsyslog version is $rsysloginstallcheck"
+      rsyslogatstartup=$(chkconfig --list | grep rsyslog | cut -d "$runlevelcurrent" -f 2 | cut -d ':' -f2 | awk '{print $1}')
+      echo "rsyslog startup state at boot is $rsyslogatstartup"
+      echo '/etc/rsyslog.conf lists the following remote log server(s):'
+      echo ''
+      cat /etc/rsyslog.conf | grep -v '^#' | grep ':514' | cut -d '@' -f2
+      echo ''
+      rsyslogstate=$(service rsyslog status | cut -d ")" -f2 | sed s/'^ '//g | cut -d '.' -f1)
+      if [ "$rsyslogstate" = "is running" ]; then
+         echo 'rsyslog is currently running'
+      else
+         echo 'rsyslog is currently not running'
+      fi
+   else
+      echo 'rsyslog is not installed'
+   fi
+
+   if [ "$checkrpmsyslogng" = "syslog-ng" ]; then
+      echo 'syslog-ng is installed'
+      syslognginstallcheck=$(rpm -qi syslog-ng | grep '^Version' | awk '{print $3}')
+      syslogngatstartup=$(chkconfig --list | grep syslog-ng | cut -d "$runlevelcurrent" -f 2 | cut -d ':' -f2 | awk '{print $1}')
+      echo "syslog-ng startup state at boot is $syslogngatstartup"
+      echo '/etc/syslog-ng/syslog-ng.conf lists the following remote log server(s):'
+      echo ''
+      cat /etc/syslog-ng/syslog-ng.conf | grep -v '^#' | grep 'transport' | cut -d '(' -f2 | awk '{print $1}' | sed s/\"//g
+      echo ''
+      syslogngstate=$(service syslog-ng status | cut -d ")" -f2 | sed s/'^ '//g | cut -d '.' -f1)
+      if [ "$syslogngstate" = "is running" ]; then
+         echo 'syslog-ng is currently running'
+      else
+         echo 'syslog-ng is currently not running'
+      fi
+   else
+      echo 'syslog-ng is not installed'
+   fi
+fi
+if [ "$rhelversion" = "7" ]; then
+   echo 'Checking syslog install and status'
+   echo ''
+   checkrpmrsyslog=$(rpm -qa | grep '^rsyslog-' | cut -d '-' -f1)
+   checkrpmsyslog-ng=$(rpm -qa | grep '^syslog-ng-' | cut -d '-' -f1 | grep -v syslog-ng-libdbi)
+   # There's work to be done here
+
+fi
+echo ''
+echo ''
+echo ''
+echo ''
+
+
+echo 'Audit for installed kernels'
+echo '----------------------------------------------------------------------'
+# Determine the number of old kernels installed
+kernelcurrentrunning=$(uname -r)
+echo "The running kernel is $kernelcurrentrunning"
+echo ''
+echo 'Other installed kernel packages:'
+echo ''
+rpm -qa | grep '^kernel-' | grep -v "$kernelcurrentrunning" | grep -vE '\-debug\-|\-devel\-|\-headers\-|\-firmware\-|\-doc\-|\-tools\-' | sort
+echo ''
+echo ''
+echo ''
+echo ''
+
+
+echo 'Audit for auto-start services'
+echo '----------------------------------------------------------------------'
+if [ "$rhelversion" = "6" ]; then
+echo 'These services start up at boot:'
+echo ''
+chkconfig --list | grep $runlevelcurrent:on | awk '{print $1}'
+fi
+if [ "$rhelversion" = "7" ]; then
+echo 'These services start up at boot:'
+echo ''
+systemctl list-unit-files | grep enabled
+fi
+echo ''
+echo ''
+echo ''
+echo ''
+
+
+echo 'Audit for local accounts with shell access'
+echo '----------------------------------------------------------------------'
+cat /etc/passwd | grep -vE '/sbin/nologin$|/bin/sync$|/sbin/shutdown$|/sbin/halt$|^root:'
+echo ''
+echo ''
+echo ''
+echo ''
+
+
+echo 'Audit for SELinux state'
+echo '----------------------------------------------------------------------'
+sudo cat /etc/selinux/config | grep '^SELINUX='
+echo ''
+echo ''
+echo ''
+echo ''
+
+
+echo 'Audit for listening services (excluding loopback)'
+echo '----------------------------------------------------------------------'
+echo 'TCP listening processes'
+netstat -antp | grep -v '127\.0\.0\.'
+echo ''
+echo 'UDP listening processes'
+netstat -anup | grep -v '127\.0\.0\.'
+echo ''
+echo ''
+echo ''
+echo ''
+
+
+ipv4forwarddisable=$(sysctl net.ipv4.ip_forward | awk '{print $3}')
+ipv4forwarddisableusepmtu=$(sysctl net.ipv4.ip_forward_use_pmtu | awk '{print $3}')
+echo 'Audit for IPv4 forwarding'
+echo '----------------------------------------------------------------------'
+if [ "$ipv4forwarddisable" = "1" ] || [ $ipv4forwarddisableusepmtu = "1" ]; then
+   echo 'IPv4 forwarding is enabled on the system!'
+else
+   echo 'IPv4 forwarding is not enabled'
+fi
+echo ''
+echo ''
+echo ''
+echo ''
+
+
+echo 'Audit for netcat or Nmap installed'
+echo '----------------------------------------------------------------------'
+rpm -qa | grep -E '^nc-|^nmap-'
+echo ''
+echo ''
+echo ''
+echo ''
+
+
+echo 'Audit for sshd configuration'
+echo '----------------------------------------------------------------------'
+# CIS Red Hat Enterprise Linux 7 Benchmark 5.2.1
+cis521sshdconfiguid=$(stat /etc/ssh/sshd_config | grep '^Access' | grep 'Uid:' | awk '{print $6}' | cut -d ')' -f1)
+cis521sshdconfiggid=$(stat /etc/ssh/sshd_config | grep '^Access' | grep 'Uid:' | awk '{print $10}' | cut -d ')' -f1)
+if [ "$cis521sshdconfiguid" != "root" ] || [ $cis521sshdconfiggid != "root" ]; then
+   echo 'CIS 5.2.1:  FAILED - /etc/ssh/sshd_config Uid and/or Guid are not set as root!'
+else
+   echo 'CIS 5.2.1:  Pass - /etc/ssh/sshd_config Uid and Guid are set as root'
+fi
+
+# CIS Red Hat Enterprise Linux 7 Benchmark 5.2.3
+cis523sshdprotocolversion=$(sudo cat /etc/ssh/sshd_config | grep '^Protocol' | awk '{print $2}')
+if [ "$cis523sshdprotocolversion" != "2" ]; then
+   echo 'CIS 5.2.3:  FAILED - /etc/ssh/sshd_config Protocol version is not set to 2!'
+else
+   echo 'CIS 5.2.3:  Pass - /etc/ssh/sshd_config Protocol set to 2'
+fi
+
+# CIS Red Hat Enterprise Linux 7 Benchmark 5.2.4
+cis524sshdloglevel=$(sudo cat /etc/ssh/sshd_config | grep '^LogLevel' | awk '{print $2}')
+if [ "$cis524sshdloglevel" != "INFO" ]; then
+   echo 'CIS 5.2.4:  FAILED - /etc/ssh/sshd_config LogLevel is not set to INFO!'
+else
+   echo 'CIS 5.2.4:  Pass - /etc/ssh/sshd_config LogLevel is set to INFO'
+fi
+
+# CIS Red Hat Enterprise Linux 7 Benchmark 5.2.5
+cis525sshdx11forwarding=$(sudo cat /etc/ssh/sshd_config | grep '^X11Forwarding' | awk '{print $2}')
+if [ "$cis525sshdx11forwarding" != "no" ]; then
+   echo 'CIS 5.2.5:  FAILED - /etc/ssh/sshd_config X11Forwarding is not set to no!'
+else
+   echo 'CIS 5.2.5:  Pass - /etc/ssh/sshd_config X11Forwarding is set to no'
+fi
+
+# CIS Red Hat Enterprise Linux 7 Benchmark 5.2.6
+# This value check may need to be adjusted for range
+cis526sshdmaxauthretries=$(sudo cat /etc/ssh/sshd_config | grep '^MaxAuthTries' | awk '{print $2}')
+if [ "$cis526sshdmaxauthretries" != "4" ]; then
+   echo 'CIS 5.2.6:  FAILED - /etc/ssh/sshd_config MaxAuthTries is not set to 4!'
+else
+   echo 'CIS 5.2.6:  Pass - /etc/ssh/sshd_config MaxAuthTries is set to 4'
+fi
+
+# CIS Red Hat Enterprise Linux 7 Benchmark 5.2.7
+cis527sshdignorerhosts=$(sudo cat /etc/ssh/sshd_config | grep '^IgnoreRhosts' | awk '{print $2}')
+if [ "$cis527sshdignorerhosts" != "yes" ]; then
+   echo 'CIS 5.2.7:  FAILED - /etc/ssh/sshd_config IgnoreRhosts is not set to yes!'
+else
+   echo 'CIS 5.2.7:  Pass - /etc/ssh/sshd_config IgnoreRhosts is set to yes'
+fi
+
+# CIS Red Hat Enterprise Linux 7 Benchmark 5.2.8
+cis528sshdhostbasedauth=$(sudo cat /etc/ssh/sshd_config | grep '^HostbasedAuthentication' | awk '{print $2}')
+if [ "$cis528sshdhostbasedauth" != "no" ]; then
+   echo 'CIS 5.2.8:  FAILED - /etc/ssh/sshd_config HostbasedAuthentication is not set to no!'
+else
+   echo 'CIS 5.2.8:  Pass - /etc/ssh/sshd_config HostbasedAuthentication is set to no'
+fi
+
+# CIS Red Hat Enterprise Linux 7 Benchmark 5.2.9
+cis529sshdpermitrootlogin=$(sudo cat /etc/ssh/sshd_config | grep '^PermitRootLogin' | awk '{print $2}')
+if [ "$cis529sshdpermitrootlogin" != "no" ]; then
+   echo 'CIS 5.2.9:  FAILED - /etc/ssh/sshd_config PermitRootLogin is not set to no!'
+else
+   echo 'CIS 5.2.9:  Pass - /etc/ssh/sshd_config PermitRootLogin is set to no'
+fi
+
+# CIS Red Hat Enterprise Linux 7 Benchmark 5.2.10
+cis5210sshdpermitemptypasswords=$(sudo cat /etc/ssh/sshd_config | grep '^PermitEmptyPasswords' | awk '{print $2}')
+if [ "$cis5210sshdpermitemptypasswords" != "no" ]; then
+   echo 'CIS 5.2.10: FAILED - /etc/ssh/sshd_config PermitEmptyPasswords is not set to no!'
+else
+   echo 'CIS 5.2.10: Pass - /etc/ssh/sshd_config PermitEmptyPasswords is set to no'
+fi
+
+# CIS Red Hat Enterprise Linux 7 Benchmark 5.2.11
+cis5211sshdpermituserenvironment=$(sudo cat /etc/ssh/sshd_config | grep '^PermitUserEnvironment' | awk '{print $2}')
+if [ "$cis5211sshdpermituserenvironment" != "no" ]; then
+   echo 'CIS 5.2.11: FAILED - /etc/ssh/sshd_config PermitUserEnvironment is not set to no!'
+else
+   echo 'CIS 5.2.11: Pass - /etc/ssh/sshd_config PermitUserEnvironment is set to no'
+fi
+
+# CIS Red Hat Enterprise Linux 7 Benchmark 5.2.12
+cis5212sshdmacs=$(sudo cat /etc/ssh/sshd_config | grep '^MACs' | awk '{print $2}')
+echo "CIS 5.2.12: /etc/ssh/sshd_config MACs set: $cis5212sshdmacs"
+
+# CIS Red Hat Enterprise Linux 7 Benchmark 5.2.13
+# This value check may need to be adjusted for range
+cis5213sshdclientaliveinterval=$(sudo cat /etc/ssh/sshd_config | grep '^ClientAliveInterval' | awk '{print $2}')
+cis5213sshdclientalivecountmax=$(sudo cat /etc/ssh/sshd_config | grep '^ClientAliveCountMax' | awk '{print $2}')
+if [ "$cis5213sshdclientaliveinterval" != "300" ]; then
+   echo 'CIS 5.2.13: FAILED - /etc/ssh/sshd_config ClientAliveInterval is not set to 300!'
+else
+   echo 'CIS 5.2.13: Pass - /etc/ssh/sshd_config ClientAliveInterval is set to 300'
+fi
+
+if [ "$cis5213sshdclientalivecountmax" != "0" ]; then
+   echo 'CIS 5.2.13: FAILED - /etc/ssh/sshd_config ClientAliveCountMax is not set to 0!'
+else
+   echo 'CIS 5.2.13: Pass - /etc/ssh/sshd_config ClientAliveCountMax is set to 0'
+fi
+
+# CIS Red Hat Enterprise Linux 7 Benchmark 5.2.14
+# This value check may need to be adjusted for range
+cis5214sshdlogingracetime=$(sudo cat /etc/ssh/sshd_config | grep '^LoginGraceTime' | awk '{print $2}')
+if [ "$cis5214sshdlogingracetime" != "60" ]; then
+   echo 'CIS 5.2.14: FAILED - /etc/ssh/sshd_config LoginGraceTime is not set to 60!'
+else
+   echo 'CIS 5.2.14: Pass - /etc/ssh/sshd_config LoginGraceTime is set to 60'
+fi
+
+# CIS Red Hat Enterprise Linux 7 Benchmark 5.2.15
+cis5215sshdallowusers=$(sudo cat /etc/ssh/sshd_config | grep '^AllowUsers' | awk '{$1=""; print $0}')
+cis5215sshdallowgroups=$(sudo cat /etc/ssh/sshd_config | grep '^AllowGroups' | awk '{$1=""; print $0}')
+cis5215sshddenyusers=$(sudo cat /etc/ssh/sshd_config | grep '^DenyUsers' | awk '{$1=""; print $0}')
+cis5215sshddenygroups=$(sudo cat /etc/ssh/sshd_config | grep '^DenyGroups' | awk '{$1=""; print $0}')
+
+if [ -z "$cis5215sshdallowusers" ]; then
+   echo 'CIS 5.2.15: FAILED - /etc/ssh/sshd_config AllowUsers is not set!'
+else
+   echo 'CIS 5.2.15: /etc/ssh/sshd_config AllowUsers:'
+   echo "$cis5215sshdallowusers"
+echo ''
+fi
+
+if [ -z "$cis5215sshdallowgroups" ]; then
+   echo 'CIS 5.2.15: FAILED - /etc/ssh/sshd_config AllowGroups is not set!'
+else
+   echo 'CIS 5.2.15: /etc/ssh/sshd_config AllowGroups:'
+   echo "$cis5215sshdallowgroups"
+echo ''
+fi
+
+if [ -z "$cis5215sshddenyusers" ]; then
+   echo 'CIS 5.2.15: FAILED - /etc/ssh/sshd_config DenyUsers is not set!'
+else
+   echo 'CIS 5.2.15: /etc/ssh/sshd_config DenyUsers:'
+   echo "$cis5215sshddenyusers"
+echo ''
+fi
+
+if [ -z "$cis5215sshddenygroups" ]; then
+   echo 'CIS 5.2.15: FAILED - /etc/ssh/sshd_config DenyGroups is not set!'
+else
+   echo 'CIS 5.2.15: /etc/ssh/sshd_config DenyGroups:'
+   echo "$cis5215sshddenygroups"
+echo ''
+fi
+
+# CIS Red Hat Enterprise Linux 7 Benchmark 5.2.16
+cis5216sshdbanner=$(sudo cat /etc/ssh/sshd_config | grep '^Banner' | awk '{print $2}')
+
+cat $cis5216sshdbanner
+
+echo ''
+echo ''
+echo ''
+echo ''
+
+
+
+echo 'Audit for yum repo targets'
+echo '----------------------------------------------------------------------'
+cat /etc/yum.repos.d/* | grep baseurl | grep -v '^#' | cut -d '/' -f3 | sort | uniq
+echo ''
+echo ''
+echo ''
+echo ''
+
+
+
+echo 'Audit for sudo access for all hosts targeting any user'
+echo '----------------------------------------------------------------------'
+cat /etc/sudoers | grep -v '^#' | grep 'ALL=(ALL)'
+echo ''
+echo ''
+echo ''
+echo ''
