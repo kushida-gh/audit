@@ -6,6 +6,20 @@
 # Script tested on CentOS 7 and assumes httpd installed via CentOS yum repo
 
 
+echo ""
+echo "Reviewing httpd configuration..."
+echo ""
+echo "Reference: https://github.com/ssllabs/research/wiki/SSL-and-TLS-Deployment-Best-Practices"
+echo ""
+
+echo "-------------------------------------------------------------------------------------------"
+
+echo ""
+rhelorcentosversion=$(cat /etc/redhat-release)
+echo "Operating System:  $rhelorcentosversion"
+echo ""
+
+
 # Check if httpd and mod_ssl are installed
 checkrpmhttpd=$(rpm -qa | grep '^httpd-' | grep -v 'httpd-tools' | cut -d '-' -f1)
 if [ "$checkrpmhttpd" = "httpd" ]; then
@@ -21,6 +35,14 @@ if [ "$checkrpmmodssl" = "mod_ssl" ]; then
    echo "mod_ssl version:  " $(rpm -qa | grep '^mod_ssl-')
 else
    echo 'mod_ssl does not seem to be installed, therefore HTTPS support is non-existent.'
+fi
+
+
+checkrpmopenssl=$(rpm -qa | grep -E '^openssl-[0-9]' | cut -d '-' -f1)
+if [ "$checkrpmopenssl" = "openssl" ]; then
+   echo "openssl version:  " $(rpm -qa | grep '^openssl-[0-9]')
+else
+   echo 'openssl does not seem to be installed.'
 fi
 echo ""
 
@@ -44,15 +66,20 @@ httpdport=$(cat /etc/httpd/conf/httpd.conf | grep Listen | grep -v '^#' | awk '{
 echo 'Basic port: '$httpdport
 httpdsecureport=$(cat /etc/httpd/conf.d/ssl.conf | grep Listen | awk '{print $2}')
 echo 'Secure port: '$httpdsecureport
-netstat -antp | grep $httpdport
-netstat -antp | grep $httpdsecureport
+netstat -antp | grep $httpdport | grep LISTEN | sed s/'         '//g
+netstat -antp | grep $httpdsecureport | grep LISTEN | sed s/'         '//g
 echo ""
 
 
+echo "-------------------------------------------------------------------------------------------"
+echo "httpd configuration check"
+echo "-------------------------------------------------------------------------------------------"
+echo ""
+
 # Check for SSLv3 and TLS 1.0 availability
 httpdsslprotocol=$(cat /etc/httpd/conf.d/ssl.conf | grep '^SSLProtocol')
-echo "The SSLProtocol setting in /etc/httpd/conf.d/ssl.conf"
-echo "$httpdsslprotocol"
+echo "1. The SSLProtocol setting in /etc/httpd/conf.d/ssl.conf:"
+echo "   $httpdsslprotocol"
 echo ""
 echo "q" | openssl s_client -connect 127.0.0.1:443 -ssl3 2>&1 | grep 'handshake failure' >> /dev/null || echo 'Insecure - SSLv3 is enabled'
 echo "q" | openssl s_client -connect 127.0.0.1:443 -tls1 2>&1 | grep 'handshake failure' >> /dev/null || echo 'Insecure - TLSv1 is enabled'
@@ -61,14 +88,119 @@ echo "q" | openssl s_client -connect 127.0.0.1:443 -tls1 2>&1 | grep 'handshake 
 # Weak ciphersuite check 
 # Note, 3DES checking currently doesn't work here since the openssl about shows DES, not 3DES
 httpdsslciphersuite=$(cat /etc/httpd/conf.d/ssl.conf | grep '^SSLCipherSuite')
-echo "The SSLCipherSuite setting in /etc/httpd/conf.d/ssl.conf"
-echo "$httpdsslciphersuite"
+echo "2. The SSLCipherSuite directive in /etc/httpd/conf.d/ssl.conf:"
+echo "   $httpdsslciphersuite"
 echo ""
 echo "q" | openssl s_client -connect 127.0.0.1:443 -cipher 3DES 2>&1 | grep 'Cipher    :' | grep DES >> /dev/null && echo 'Insecure - DES and/or 3DES enabled'
 declare -a ciphersuitecrud=("3DES" "RC4" "IDEA" "MD5" "SHA1")
 for i in "${ciphersuitecrud[@]}"; do 
    echo "q" | openssl s_client -connect 127.0.0.1:443 -cipher "$i" 2>&1 | grep 'Cipher    :' | grep "$i" >> /dev/null && echo "Insecure - "$i" enabled"
 done
+
+
+# Check for SSLCompression directive
+httpdsslcompression=$(cat /etc/httpd/conf.d/ssl.conf | grep '^SSLCompression')
+echo "3. The SSLCompression directive in /etc/httpd/conf.d/ssl.conf:"
+if [ -z "$httpdsslcompression" ]; then
+   echo "   The directive is not set, this is fine."
+   echo ""
+else
+   echo "   $httpdsslcompression"
+   echo ""
+fi
+
+
+# Check for SSLHonorCipherOrder directive
+httpdsslcipherorder=$(cat /etc/httpd/conf.d/ssl.conf | grep '^SSLHonorCipherOrder')
+echo "4. The SSLHonorCipherOrder directive in /etc/httpd/conf.d/ssl.conf:"
+if [ -z "$httpdsslcipherorder" ]; then
+   echo "   The directive is not set, recommend setting to On."
+   echo ""
+else
+   echo "   $httpdsslcipherorder"
+   echo ""
+fi
+
+
+# Check for HSTS directive
+httpdsslhsts=$(cat /etc/httpd/conf.d/ssl.conf | grep 'Strict-Transport-Security')
+echo "5. The Strict-Transport-Security header directive in /etc/httpd/conf.d/ssl.conf:"
+if [ -z "$httpdsslhsts" ]; then
+   echo "   Strict-Transport-Security is not set, recommend setting in ssl.conf:"
+   echo ""
+   echo "   Header always set Strict-Transport-Security \"max-age=31536000\""
+   echo ""
+else
+   echo "   $httpdsslhsts"
+   echo ""
+fi
+
+
+# Is TraceEnable set to off?
+traceset=$(cat /etc/httpd/conf/httpd.conf | grep TraceEnable | grep -v '^#' | awk '{print $1'})
+tracesetting=$(cat /etc/httpd/conf/httpd.conf | grep TraceEnable | grep -v '^#' | awk '{print $2'})
+echo "6. The TraceEnable directive in /etc/httpd/conf/httpd.conf:"
+if [ -z "$traceset" ]; then
+   echo "   TraceEnable directive is not set within /etc/httpd/conf/httpd.conf"
+   tracetest=$(curl -s -I -X TRACE http://127.0.0.1/ | grep '200')
+   if [[ "$tracetest" == *"HTTP/1.1 200 OK"* ]]; then
+      echo "   Results from a HTTP TRACE to this server: $tracetest"
+      echo "   See: https://www.owasp.org/index.php/Cross_Site_Tracing"
+      echo ""
+   fi
+fi
+
+if [ "$traceset" = "TraceEnable" ]; then
+   echo "   TraceEnable directive exists in /etc/httpd/conf/httpd.conf and set to $tracesetting"
+   echo ""
+fi
+
+if [ "$tracesetting" = "on" ] || [ "$tracesetting" = "On" ]; then
+   tracetest=$(curl -s -I -X TRACE http://127.0.0.1/ | grep '200')
+   if [[ "$tracetest" == *"HTTP/1.1 200 OK"* ]]; then
+      echo "   Results from a HTTP TRACE to this server: $tracetest"
+   fi
+   echo "   Are you sure you want to allow the TRACE method?"
+   echo "   See: https://www.owasp.org/index.php/Cross_Site_Tracing"
+   echo ""
+fi
+
+
+# Check ServerToken value
+httpdservertoken=$(cat /etc/httpd/conf/httpd.conf | grep '^ServerTokens')
+httpdservertokeninheader=$(curl -s -I http://127.0.0.1 | grep Server | cut -d ':' -f2- | sed s/'^ '//g)
+echo "7. The ServerToken directive in /etc/httpd/conf/httpd.conf:"
+if [ -z "$httpdservertoken" ]; then
+   echo "   ServerTokens is not set within /etc/httpd/conf/httpd.conf; httpd currently returns this ServerToken in the response header:"
+   echo ""
+   echo "   $httpdservertokeninheader"
+   echo ""
+   echo "   By not setting a ServerTokens directive, the response header reveals the detailed Apache version (useful to attackers). Recommend setting to "Prod" instead."
+   echo ""
+else 
+   httpdservertokenvalue=$(cat /etc/httpd/conf/httpd.conf | grep '^ServerTokens' | awk '{print $2}')
+   if [ "$httpdservertokenvalue" != "Prod" ] && [ "$httpdservertokenvalue" != "prod" ]; then
+      echo "   ServerTokens set to "$httpdservertokenvalue" revealing the Apache version in the response header (useful to attackers); httpd currently returns this ServerToken in the response header:"
+      echo ""
+      echo "   $httpdservertokeninheader"
+      echo ""
+      echo "   See: https://httpd.apache.org/docs/2.4/mod/core.html#servertokens"
+      echo ""
+   fi
+fi
+
+
+
+# Check which user/group httpd runs as
+httpduser=$(cat /etc/httpd/conf/httpd.conf | grep '^User' | awk '{print $2}')
+httpdgroup=$(cat /etc/httpd/conf/httpd.conf | grep '^Group' | awk '{print $2}')
+if [ "$httpduser" != "apache" ]; then
+   echo "httpd is not set to run as user apache - it runs as user $httpduser"
+fi
+
+if [ "$httpdgroup" != "apache" ]; then
+   echo "httpd is not to run as group apache - it runs as group $httpdgroup"
+fi
 
 
 # Private key permissions check
@@ -86,61 +218,4 @@ fi
 
 if [ "$privatekeygroup" != "root" ]; then
    echo "The private key group owner of $privatekeypath must be root!"
-fi
-
-
-# Is TraceEnable set to off?
-traceset=$(cat /etc/httpd/conf/httpd.conf | grep TraceEnable | grep -v '^#' | awk '{print $1'})
-tracesetting=$(cat /etc/httpd/conf/httpd.conf | grep TraceEnable | grep -v '^#' | awk '{print $2'})
-if [ -z "$traceset" ]; then
-   echo "TraceEnable directive is not set within /etc/httpd/conf/httpd.conf"
-   tracetest=$(curl -s -I -X TRACE http://127.0.0.1/ | grep '200')
-   if [[ "$tracetest" == *"HTTP/1.1 200 OK"* ]]; then
-      echo "Results from a HTTP TRACE to this server: $tracetest"
-      echo "See: https://www.owasp.org/index.php/Cross_Site_Tracing"
-      echo ""
-   fi
-fi
-
-if [ "$traceset" = "TraceEnable" ]; then
-   echo "TraceEnable directive exists in /etc/httpd/conf/httpd.conf and set to $tracesetting"
-   echo ""
-fi
-
-if [ "$tracesetting" = "on" ] || [ "$tracesetting" = "On" ]; then
-   tracetest=$(curl -s -I -X TRACE http://127.0.0.1/ | grep '200')
-   if [[ "$tracetest" == *"HTTP/1.1 200 OK"* ]]; then
-      echo "Results from a HTTP TRACE to this server: $tracetest"
-   fi
-   echo 'Are you sure you want to allow the TRACE method?'
-   echo 'See: https://www.owasp.org/index.php/Cross_Site_Tracing'
-   echo ""
-fi
-
-
-# Check which user/group httpd runs as
-httpduser=$(cat /etc/httpd/conf/httpd.conf | grep '^User' | awk '{print $2}')
-httpdgroup=$(cat /etc/httpd/conf/httpd.conf | grep '^Group' | awk '{print $2}')
-if [ "$httpduser" != "apache" ]; then 
-   echo "httpd is not set to run as user apache - it runs as user $httpduser"
-fi
-
-if [ "$httpdgroup" != "apache" ]; then 
-   echo "httpd is not to run as group apache - it runs as group $httpdgroup"
-fi
-
-
-# Check ServerToken value
-httpdservertoken=$(cat /etc/httpd/conf/httpd.conf | grep '^ServerTokens')
-httpdservertokeninheader=$(curl -s -I http://127.0.0.1 | grep Server | cut -d ':' -f2- | sed s/'^ '//g)
-if [ -z "$httpdservertoken" ]; then
-   echo "ServerTokens is not set within /etc/httpd/conf/httpd.conf"
-else 
-   httpdservertokenvalue=$(cat /etc/httpd/conf/httpd.conf | grep '^ServerTokens' | awk '{print $2}')
-   if [ "$httpdservertokenvalue" != "Prod" ] && [ "$httpdservertokenvalue" != "prod" ]; then
-      echo "ServerTokens set to "$httpdservertokenvalue" revealing the Apache version in the response header - useful to attackers"
-      echo "httpd currently returns this ServerToken in the response header: $httpdservertokeninheader"
-      echo ""
-      echo "See: https://httpd.apache.org/docs/2.4/mod/core.html#servertokens"
-   fi
 fi
