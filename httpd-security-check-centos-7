@@ -3,7 +3,7 @@
 # httpd Security Self-Check
 #
 # Looks for several security-related configuration bits
-# Script tested on CentOS 7 and assumes httpd installed via CentOS yum repo
+# Script tested on RHEL/CentOS 6 and 7, assumes httpd installed via vendor yum repo
 
 
 echo ""
@@ -47,20 +47,41 @@ fi
 echo ""
 
 
-httpdsvcenabled=$(systemctl status httpd | grep loaded | awk '{print $4}' | cut -d ';' -f1)
-if [ "$httpdsvcenabled" = "enabled" ]; then
-   echo 'httpd.service is enabled'
-else
-   echo 'httpd.service is not enabled'
+if [ -f /usr/bin/systemctl ]; then
+   httpdsvcenabled=$(systemctl status httpd | grep loaded | awk '{print $4}' | cut -d ';' -f1)
+   if [ "$httpdsvcenabled" = "enabled" ]; then
+      echo 'httpd.service is enabled'
+   else
+      echo 'httpd.service is not enabled'
+   fi
 fi
 
-
-httpdactive=$(systemctl status httpd | grep Active | awk '{print $2}')
-if [ "$httpdactive" = "active" ]; then
-   echo "httpd is running"
-else
-   echo "httpd is not running"
+if [ -f /etc/init.conf ]; then
+   httpdsvcenabled=$(chkconfig --list | grep httpd | awk '{print $5}' | cut -d ':' -f2)
+   if [ "$httpdsvcenabled" = "on" ]; then
+      echo 'httpd is enabled for runlevel 3'
+   else
+      echo 'httpd is not enabled for runlevel 3'
+   fi
 fi
+
+if [ -f /usr/bin/systemctl ]; then
+   httpdactive=$(systemctl status httpd | grep Active | awk '{print $2}')
+   if [ "$httpdactive" = "active" ]; then
+      echo 'httpd is running'
+   else
+      echo 'httpd is not running'
+   fi
+fi
+if [ -f /etc/init.conf ]; then
+   httpdactive=$(service httpd status | awk '{print $5}' | cut -d'.' -f 1)
+   if [ "$httpdactive" = "running" ]; then
+      echo 'httpd is running'
+   else
+      echo 'httpd is not running'
+   fi
+fi
+
 echo ""
 httpdport=$(cat /etc/httpd/conf/httpd.conf | grep Listen | grep -v '^#' | awk '{print $2}')
 echo 'Basic port: '$httpdport
