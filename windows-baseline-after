@@ -1,0 +1,15 @@
+# Change to current user's home desktop (C:\Users\myusername\Desktop):
+Set-Location ~\Desktop
+
+Get-Service | Out-File .\After\$env:computername-services-$((Get-Date).tostring("yyyy-MM-dd")).txt
+Get-WmiObject Win32_Process | Select ProcessName,CommandLine | Sort-Object -Property ProcessName | Out-File .\After\$env:computername-processes-names-paths-cli-$((Get-Date).tostring("yyyy-MM-dd")).txt
+# Get-WmiObject -Class Win32_Product | Select Name,Vendor,Version,IdentifyingNumber | Out-File $env:computername-installed-software-$((Get-Date).tostring("yyyy-MM-dd")).txt
+Get-ItemProperty HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* | Select-Object DisplayName,DisplayVersion,Publisher,InstallDate | Out-File .\After\$env:computername-installed-software-$((Get-Date).tostring("yyyy-MM-dd")).txt
+Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\* | Select-Object DisplayName,DisplayVersion,Publisher,InstallDate | Out-File -Append .\After\$env:computername-installed-software-$((Get-Date).tostring("yyyy-MM-dd")).txt
+Get-AppxPackage -AllUsers | Out-File .\After\$env:computername-installed-apps-all-users-$((Get-Date).tostring("yyyy-MM-dd")).txt
+Get-AppxPackage -AllUsers | Select Name,PackageFullName | Out-File .\After\$env:computername-installed-apps-all-users-names-packagefullname-$((Get-Date).tostring("yyyy-MM-dd")).txt
+Get-ChildItem -Directory -Recurse C:\ | findstr "Directory" | Out-File .\After\$env:computername-directories-$((Get-Date).tostring("yyyy-MM-dd")).txt
+Get-ScheduledTask | Select TaskName,State | Out-File .\After\$env:computername-scheduled-tasks-$((Get-Date).tostring("yyyy-MM-dd")).txt
+
+# Use RegistryChangesView (https://www.nirsoft.net/utils/registry_changes_view.html) to create "after" registry state
+.\RegistryChangesView.exe /CreateSnapshot ".\After\registry-snapshot2" /CreateSnapshot.SoftwareHive 1 /CreateSnapshot.SystemHive 1 /CreateSnapshot.NTUserHive 1 /CreateSnapshot.UsrClassHive 1 /CreateSnapshot.DefaultHive 1 /CreateSnapshot.BCD00000000Hive 1 /CreateSnapshot.SAMHive 1 /CreateSnapshot.SecurityHive 1 
