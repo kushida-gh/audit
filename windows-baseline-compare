@@ -1,0 +1,24 @@
+# Compare outputs of before and after files:
+Compare-Object (Get-Content .\Before\$env:computername-services-$((Get-Date).tostring("yyyy-MM-dd")).txt) (Get-Content .\After\$env:computername-services-$((Get-Date).tostring("yyyy-MM-dd")).txt) | Out-File .\Diff\$env:computername-diff-services-$((Get-Date).tostring("yyyy-MM-dd")).txt
+
+Compare-Object (Get-Content .\Before\$env:computername-processes-names-paths-cli-$((Get-Date).tostring("yyyy-MM-dd")).txt) (Get-Content .\After\$env:computername-processes-names-paths-cli-$((Get-Date).tostring("yyyy-MM-dd")).txt) | Out-File .\Diff\$env:computername-diff-processes-names-paths-cli-$((Get-Date).tostring("yyyy-MM-dd")).txt
+
+Compare-Object (Get-Content .\Before\$env:computername-installed-software-$((Get-Date).tostring("yyyy-MM-dd")).txt) (Get-Content .\After\$env:computername-installed-software-$((Get-Date).tostring("yyyy-MM-dd")).txt) | Out-File .\Diff\$env:computername-diff-installed-software-$((Get-Date).tostring("yyyy-MM-dd")).txt
+
+Compare-Object (Get-Content .\Before\$env:computername-installed-apps-all-users-$((Get-Date).tostring("yyyy-MM-dd")).txt) (Get-Content .\After\$env:computername-installed-apps-all-users-$((Get-Date).tostring("yyyy-MM-dd")).txt) | Out-File .\Diff\$env:computername-diff-installed-apps-all-users-$((Get-Date).tostring("yyyy-MM-dd")).txt
+
+Compare-Object (Get-Content .\Before\$env:computername-installed-apps-all-users-names-packagefullname-$((Get-Date).tostring("yyyy-MM-dd")).txt) (Get-Content .\After\$env:computername-installed-apps-all-users-names-packagefullname-$((Get-Date).tostring("yyyy-MM-dd")).txt) | Out-File .\Diff\$env:computername-diff-installed-apps-all-users-names-packagefullname-$((Get-Date).tostring("yyyy-MM-dd")).txt
+
+Compare-Object (Get-Content .\Before\$env:computername-directories-$((Get-Date).tostring("yyyy-MM-dd")).txt) (Get-Content .\After\$env:computername-directories-$((Get-Date).tostring("yyyy-MM-dd")).txt) | Out-File .\Diff\$env:computername-diff-directories-$((Get-Date).tostring("yyyy-MM-dd")).txt
+
+Compare-Object (Get-Content .\Before\$env:computername-scheduled-tasks-$((Get-Date).tostring("yyyy-MM-dd")).txt) (Get-Content .\After\$env:computername-scheduled-tasks-$((Get-Date).tostring("yyyy-MM-dd")).txt) | Out-File .\Diff\$env:computername-diff-scheduled-tasks-$((Get-Date).tostring("yyyy-MM-dd")).txt
+
+
+
+# Compare registry states; note this may contain registry changes not related to the software install baseline
+.\RegistryChangesView.exe /DataSourceDirection 1 /DataSourceType1 2 /DataSourceType2 2 /RegSnapshotPath1 .\Before\registry-snapshot1 /RegSnapshotPath2 .\After\registry-snapshot2 /stext .\Diff\reg-diff.txt
+
+.\RegistryChangesView.exe /DataSourceDirection 1 /DataSourceType1 2 /DataSourceType2 2 /RegSnapshotPath1 .\Before\registry-snapshot1 /RegSnapshotPath2 .\After\registry-snapshot2 /scomma .\Diff\reg-diff.csv
+
+# Get the number of lines in the registry diff CSV
+Get-Content .\Diff\reg-diff.csv | Measure-Object -Line
