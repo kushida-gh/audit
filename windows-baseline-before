@@ -23,11 +23,20 @@ Get-AppxPackage -AllUsers | Out-File .\Before\$env:computername-installed-apps-a
 # Get installed Microsoft Store applications (show only Name and PackageFullName properties):
 Get-AppxPackage -AllUsers | Select Name,PackageFullName | Out-File .\Before\$env:computername-installed-apps-all-users-names-packagefullname-$((Get-Date).tostring("yyyy-MM-dd")).txt
 
+# Get installed drivers:
+Get-WmiObject Win32_PnPSignedDriver | Select DeviceName,Manufacturer,DriverVersion | Sort-Object DeviceName | Out-File .\Before\$env:computername-drivers-$((Get-Date).tostring("yyyy-MM-dd")).txt
+
 # Get recursive directory listing (show directory names only):
 Get-ChildItem -Directory -Recurse C:\ | findstr "Directory" | Out-File .\Before\$env:computername-directories-$((Get-Date).tostring("yyyy-MM-dd")).txt
 
 # Get list of scheduled tasks:
 Get-ScheduledTask | Select TaskName,State | Out-File .\Before\$env:computername-scheduled-tasks-$((Get-Date).tostring("yyyy-MM-dd")).txt
+
+# Get Windows Firewall rules (various policy stores):
+Get-NetFirewallRule -PolicyStore ActiveStore | Select Name,Enabled,Profile,Action | Sort-Object Name | Out-File .\Before\$env:computername-wf-active-$((Get-Date).tostring("yyyy-MM-dd")).txt
+Get-NetFirewallRule -PolicyStore PersistentStore | Select Name,Enabled,Profile,Action | Sort-Object Name | Out-File .\Before\$env:computername-wf-persistent-$((Get-Date).tostring("yyyy-MM-dd")).txt
+Get-NetFirewallRule -PolicyStore ConfigurableServiceStore | Select Name,Enabled,Profile,Action | Sort-Object Name | Out-File .\Before\$env:computername-wf-configurableservice-$((Get-Date).tostring("yyyy-MM-dd")).txt
+Get-NetFirewallRule -PolicyStore StaticServiceStore | Select Name,Enabled,Profile,Action | Sort-Object Name | Out-File .\Before\$env:computername-wf-staticservice-$((Get-Date).tostring("yyyy-MM-dd")).txt
 
 # Use RegistryChangesView (https://www.nirsoft.net/utils/registry_changes_view.html) to create "before" registry state
 .\RegistryChangesView.exe /CreateSnapshot ".\Before\registry-snapshot1" /CreateSnapshot.SoftwareHive 1 /CreateSnapshot.SystemHive 1 /CreateSnapshot.NTUserHive 1 /CreateSnapshot.UsrClassHive 1 /CreateSnapshot.DefaultHive 1 /CreateSnapshot.BCD00000000Hive 1 /CreateSnapshot.SAMHive 1 /CreateSnapshot.SecurityHive 1 
