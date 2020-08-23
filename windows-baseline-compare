@@ -9,10 +9,19 @@ Compare-Object (Get-Content .\Before\$env:computername-installed-apps-all-users-
 
 Compare-Object (Get-Content .\Before\$env:computername-installed-apps-all-users-names-packagefullname-$((Get-Date).tostring("yyyy-MM-dd")).txt) (Get-Content .\After\$env:computername-installed-apps-all-users-names-packagefullname-$((Get-Date).tostring("yyyy-MM-dd")).txt) | Out-File .\Diff\$env:computername-diff-installed-apps-all-users-names-packagefullname-$((Get-Date).tostring("yyyy-MM-dd")).txt
 
+Compare-Object (Get-Content .\Before\$env:computername-drivers-$((Get-Date).tostring("yyyy-MM-dd")).txt) (Get-Content .\After\$env:computername-drivers-$((Get-Date).tostring("yyyy-MM-dd")).txt) | Out-File .\Diff\$env:computername-diff-drivers-$((Get-Date).tostring("yyyy-MM-dd")).txt
+
 Compare-Object (Get-Content .\Before\$env:computername-directories-$((Get-Date).tostring("yyyy-MM-dd")).txt) (Get-Content .\After\$env:computername-directories-$((Get-Date).tostring("yyyy-MM-dd")).txt) | Out-File .\Diff\$env:computername-diff-directories-$((Get-Date).tostring("yyyy-MM-dd")).txt
 
 Compare-Object (Get-Content .\Before\$env:computername-scheduled-tasks-$((Get-Date).tostring("yyyy-MM-dd")).txt) (Get-Content .\After\$env:computername-scheduled-tasks-$((Get-Date).tostring("yyyy-MM-dd")).txt) | Out-File .\Diff\$env:computername-diff-scheduled-tasks-$((Get-Date).tostring("yyyy-MM-dd")).txt
 
+Compare-Object (Get-Content .\Before\$env:computername-wf-active-$((Get-Date).tostring("yyyy-MM-dd")).txt) (Get-Content .\After\$env:computername-wf-active-$((Get-Date).tostring("yyyy-MM-dd")).txt) | Out-File .\Diff\$env:computername-diff-wf-active-$((Get-Date).tostring("yyyy-MM-dd")).txt
+
+Compare-Object (Get-Content .\Before\$env:computername-wf-persistent-$((Get-Date).tostring("yyyy-MM-dd")).txt) (Get-Content .\After\$env:computername-wf-persistent-$((Get-Date).tostring("yyyy-MM-dd")).txt) | Out-File .\Diff\$env:computername-diff-wf-persistent-$((Get-Date).tostring("yyyy-MM-dd")).txt
+
+Compare-Object (Get-Content .\Before\$env:computername-wf-configurableservice-$((Get-Date).tostring("yyyy-MM-dd")).txt) (Get-Content .\After\$env:computername-wf-configurableservice-$((Get-Date).tostring("yyyy-MM-dd")).txt) | Out-File .\Diff\$env:computername-diff-wf-configurableservice-$((Get-Date).tostring("yyyy-MM-dd")).txt
+
+Compare-Object (Get-Content .\Before\$env:computername-wf-staticservice-$((Get-Date).tostring("yyyy-MM-dd")).txt) (Get-Content .\After\$env:computername-wf-staticservice-$((Get-Date).tostring("yyyy-MM-dd")).txt) | Out-File .\Diff\$env:computername-diff-wf-staticservice-$((Get-Date).tostring("yyyy-MM-dd")).txt
 
 
 # Compare registry states; note this may contain registry changes not related to the software install baseline
