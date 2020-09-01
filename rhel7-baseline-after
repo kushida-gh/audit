@@ -1,0 +1,64 @@
+#!/bin/bash
+#
+# Baseline this host (after any test application install), run script as root
+
+rightnow=$(date +%Y-%m-%d)
+systemhostname=$(hostname | cut -d '.' -f 1)
+out=("$systemhostname")
+
+# Local users in /etc/passwd
+cat /etc/passwd | cut -d ':' -f 1 | sort >> after/$out-local-users-$rightnow.txt
+
+# Local users in /etc/passwd with bash access
+cat /etc/passwd | grep bash$ >> after/$out-local-users-with-shell-access-$rightnow.txt
+
+# Local groups in /etc/group
+cat /etc/group | cut -d ':' -f 1 | sort >> after/$out-group-$rightnow.txt
+
+# RPMs installed
+rpm -qa | sort >> after/$out-rpm-list-$rightnow.txt
+
+# RPMs installed count
+rpm -qa | wc -l >> after/$out-rpm-count-$rightnow.txt
+
+# System services installed
+systemctl list-unit-files >> after/$out-services-$rightnow.txt
+
+# System services enabled for to run at boot
+systemctl list-unit-files | grep enabled | sort >> after/$out-services-enabled-$rightnow.txt
+
+# SELinux enforcement policy
+getenforce >> after/$out-selinux-mode-$rightnow.txt
+
+# SELinux status output
+sestatus >> after/$out-selinux-status-$rightnow.txt
+
+# Network interface configuration
+ifconfig -a | grep -E 'flags|inet' >> after/$out-ifconfig--$rightnow.txt
+
+# TCP listening processes and ports
+netstat -antp | grep LISTEN | sed s/'[0-9]\+\/'//g >> after/$out-netstat-listening-tcp-$rightnow.txt
+
+# UDP listening processes and ports
+netstat -anup | grep -E '0 0.0.0.0|0 127.0.0.1|0 ::' >> after/$out-netstat-listening-udp-$rightnow.txt
+
+# Process list (usernames and process commands, sorted by username
+ps -eo user,command --sort=user >> after/$out-processes-$rightnow.txt
+
+# Process tree
+pstree -a >> after/$out-process-tree-$rightnow.txt
+
+# Cron jobs for root
+cat /var/spool/cron/root >> after/$out-cron-root-$rightnow.txt
+
+# DNS nameserver configuration
+cat /etc/resolv.conf | grep ^nameserver >> after/$out-dns-servers-$rightnow.txt
+
+# NTP target server configuration
+cat /etc/ntp.conf | grep ^server >> after/$out-ntp-servers-$rightnow.txt
+
+# List of directories on file system
+find / -type d -print >> after/$out-directories-$rightnow.txt
+
+# Disk utilization
+df >> after/$out-disk-usage-$rightnow.txt
