@@ -1,0 +1,34 @@
+#!/bin/bash
+#
+# Compare diff before/after baseline files, run script as root
+
+rightnow=$(date +%Y-%m-%d)
+systemhostname=$(hostname | cut -d '.' -f 1)
+out=("$systemhostname")
+
+diff before/$out-local-users-with-shell-access-$rightnow.txt after/$out-local-users-with-shell-access-$rightnow.txt >> diff/$out-group-$rightnow.txt
+diff before/$out-group-$rightnow.txt after/$out-group-$rightnow.txt >> diff/$out-group-$rightnow.txt
+diff before/$out-rpm-list-$rightnow.txt after/$out-rpm-list-$rightnow.txt >> diff/$out-rpm-list-$rightnow.txt
+diff before/$out-rpm-count-$rightnow.txt after/$out-rpm-count-$rightnow.txt >> diff/$out-rpm-count-$rightnow.txt
+diff before/$out-services-$rightnow.txt after/$out-services-$rightnow.txt >> diff/$out-services-$rightnow.txt
+diff before/$out-services-enabled-$rightnow.txt after/$out-services-enabled-$rightnow.txt >> diff/$out-services-enabled-$rightnow.txt
+diff before/$out-selinux-mode-$rightnow.txt after/$out-selinux-mode-$rightnow.txt >> diff/$out-selinux-mode-$rightnow.txt
+diff before/$out-selinux-status-$rightnow.txt after/$out-selinux-status-$rightnow.txt >> diff/$out-selinux-status-$rightnow.txt
+diff before/$out-ifconfig--$rightnow.txt after/$out-ifconfig--$rightnow.txt >> diff/$out-ifconfig--$rightnow.txt
+diff before/$out-netstat-listening-tcp-$rightnow.txt after/$out-netstat-listening-tcp-$rightnow.txt >> diff/$out-netstat-listening-tcp-$rightnow.txt
+diff before/$out-netstat-listening-udp-$rightnow.txt after/$out-netstat-listening-udp-$rightnow.txt >> diff/$out-netstat-listening-udp-$rightnow.txt
+diff before/$out-processes-$rightnow.txt after/$out-processes-$rightnow.txt >> diff/$out-processes-$rightnow.txt
+diff before/$out-process-tree-$rightnow.txt after/$out-process-tree-$rightnow.txt >> diff/$out-process-tree-$rightnow.txt
+diff before/$out-cron-root-$rightnow.txt after/$out-cron-root-$rightnow.txt >> diff/$out-cron-root-$rightnow.txt
+diff before/$out-dns-servers-$rightnow.txt after/$out-dns-servers-$rightnow.txt >> diff/$out-dns-servers-$rightnow.txt
+diff before/$out-ntp-servers-$rightnow.txt after/$out-ntp-servers-$rightnow.txt >> diff/$out-ntp-servers-$rightnow.txt
+diff before/$out-directories-$rightnow.txt after/$out-directories-$rightnow.txt >> diff/$out-directories-$rightnow.txt
+diff before/$out-disk-usage-$rightnow.txt after/$out-disk-usage-$rightnow.txt >> diff/$out-disk-usage-$rightnow.txt
+
+# Remove 0-byte diff files representing no changes for that category
+cd diff
+find -type f -size 0 -delete
+cd ..
+
+# Finally, list files which have system changes in them
+ls -l diff*
