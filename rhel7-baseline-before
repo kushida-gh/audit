@@ -37,7 +37,7 @@ echo '' >> system-summary/$out-host-summary-$rightnow.txt
 echo '' >> system-summary/$out-host-summary-$rightnow.txt
 echo 'System memory total' >> system-summary/$out-host-summary-$rightnow.txt
 echo '---------------------------------------------------------------------------------------------' >> system-summary/$out-host-summary-$rightnow.txt
-free -m | grep '^Mem:' | awk '{print $2}' >> system-summary/$out-host-summary-$rightnow.txt
+free | grep '^Mem:' | awk '{print $2}' >> system-summary/$out-host-summary-$rightnow.txt
 echo '' >> system-summary/$out-host-summary-$rightnow.txt
 echo '' >> system-summary/$out-host-summary-$rightnow.txt
 
